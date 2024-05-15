@@ -111,6 +111,22 @@ class GraphFrame:
         return HPCToolkitReader(dirname).read()
 
     @staticmethod
+    def from_hpctoolkit_latest(dirname: str, max_depth: int = None, min_percentage_of_parent_time: int = None, min_percentage_of_application_time: int = None):
+        """
+        Read an HPCToolkit database directory into a new GraphFrame
+
+        Arguments:
+            dirname (str): directory of an HPCToolkit performance database
+
+        Returns:
+            (GraphFrame): new GraphFrame containing HPCToolkit profile data
+        """
+        # import this lazily to avoid circular dependencies
+        from .readers.hpctoolkit_reader_latest import HPCToolkitReaderLatest
+
+        return HPCToolkitReaderLatest(dirname, parse_depth=max_depth, parent_percentage_time=min_percentage_of_parent_time, application_time=min_percentage_of_application_time).read()
+
+    @staticmethod
     def from_caliper(filename_or_stream, query=None):
         """Read in a Caliper .cali or .json file.
 
