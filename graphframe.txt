@@ -1,0 +1,86 @@
+    def collapsable_visualization(self):
+        from ipytree import Node as TreeNode
+        from ipytree import Tree
+
+        tree = Tree()
+
+        application_time = None
+
+        def visit_node(node: Node, depth: int = 0, parent: Node = None) -> None:
+            node_text = node.frame["name"]
+            if node_text == 1:
+                node_text = "entry"
+
+            my_time = round(self.dataframe.loc[node][self.default_metric], 2)
+            node_text = f"{node_text} -> {my_time}"
+
+            node_collapsed = True
+            if my_time / application_time * 100 < 1:
+                node_collapsed = False
+
+            tree_node = TreeNode(node_text, opened=node_collapsed)
+            if parent is None:
+                tree.add_node(tree_node)
+            else:
+                parent.add_node(tree_node)
+
+            for child in node.children:
+                visit_node(child, depth+1, tree_node)
+
+
+        root = self.graph.roots[0]
+        application_time = self.dataframe.loc[root][self.default_metric]
+
+        visit_node(root)
+
+        return tree
+
+
+    def filter_out_nodes(self, max_depth: int = None, min_percentage_of_parent_time: int = None, min_percentage_of_application_time: int = None):
+
+        application_time = None
+        filtered_nodes = []
+        roots = []
+
+        # TODO: remove empty columns (that are filled with only NaNs after the filter) + update inc/exc metrics list after that!!
+        # TODO: depth can be inside a Node class!!
+
+        def visit_node(node: Node, depth: int = 0, parent: Node = None) -> None:
+            
+            if max_depth is not None and depth > max_depth:
+                return
+                        
+            if min_percentage_of_application_time is not None and self.dataframe.loc[node][self.default_metric] / application_time * 100 < min_percentage_of_application_time:
+                return
+            
+
+            cloned_node = node.copy()
+            cloned_node._hatchet_nid = node._hatchet_nid
+            if parent is not None:
+                cloned_node.add_parent(parent)
+                parent.add_child(cloned_node)
+
+            else:
+                roots.append(cloned_node)
+            
+            filtered_nodes.append(cloned_node)
+
+            for child in node.children:
+                if min_percentage_of_parent_time is not None and self.dataframe.loc[child][self.default_metric] / self.dataframe.loc[node][self.default_metric] * 100 < min_percentage_of_parent_time:
+                    continue
+
+                visit_node(child, depth+1, parent=cloned_node)
+
+
+        root = self.graph.roots[0]
+        application_time = self.dataframe.loc[root][self.default_metric]
+
+        visit_node(root)
+
+
+
+        return GraphFrame(Graph(roots), self.dataframe.loc[filtered_nodes], self.inc_metrics.copy(), self.exc_metrics.copy(), default_metric=self.default_metric)
+
+
+# TODO: Node class has depth attribute!!
+

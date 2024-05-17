@@ -184,10 +184,10 @@ class HPCToolkitReaderLatest:
                 "P?MPI_.+",
                 name,
             ):
-                if name.startswith("P"):
-                    name = name[1:]
+                #if name.startswith("P"):
+                    #name = name[1:]
 
-                name = name[: re.match("^MPI_[a-zA-Z_]+", name).end()]
+                name = name[: re.match("^P?MPI_[a-zA-Z_]+", name).end()]
 
             self._functions[pFunction] = {
                 "id": pFunction,
