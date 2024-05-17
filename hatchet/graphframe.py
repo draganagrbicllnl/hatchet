@@ -111,12 +111,15 @@ class GraphFrame:
         return HPCToolkitReader(dirname).read()
 
     @staticmethod
-    def from_hpctoolkit_latest(dirname: str, max_depth: int = None, min_percentage_of_parent_time: int = None, min_percentage_of_application_time: int = None):
+    def from_hpctoolkit_latest(dirname: str, max_depth: int = None, min_percentage_of_application_time: int = None, min_percentage_of_parent_time: int = None):
         """
         Read an HPCToolkit database directory into a new GraphFrame
 
         Arguments:
             dirname (str): directory of an HPCToolkit performance database
+            max_depth (int): maximum depth that nodes in the CCT can have to be imported in Hatchet
+            min_percentage_of_application_time (int): minimum percentage of application time that nodes in the CCT must have to be imported in Hatchet
+            min_percentage_of_parent_time (int): minimum percentage of parent time that nodes in the CCT must have to be imported in Hatchet
 
         Returns:
             (GraphFrame): new GraphFrame containing HPCToolkit profile data
@@ -124,7 +127,7 @@ class GraphFrame:
         # import this lazily to avoid circular dependencies
         from .readers.hpctoolkit_reader_latest import HPCToolkitReaderLatest
 
-        return HPCToolkitReaderLatest(dirname, parse_depth=max_depth, parent_percentage_time=min_percentage_of_parent_time, application_time=min_percentage_of_application_time).read()
+        return HPCToolkitReaderLatest(dirname, max_depth=max_depth, min_application_percentage_time=min_percentage_of_application_time, min_parent_percentage_time=min_percentage_of_parent_time).read()
 
     @staticmethod
     def from_caliper(filename_or_stream, query=None):

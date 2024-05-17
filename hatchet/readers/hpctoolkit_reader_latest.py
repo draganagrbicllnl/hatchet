@@ -1,3 +1,8 @@
+# Copyright 2017-2023 Lawrence Livermore National Security, LLC and other
+# Hatchet Project Developers. See the top-level LICENSE file for details.
+#
+# SPDX-License-Identifier: MIT
+
 import os
 import re
 import struct
@@ -5,7 +10,10 @@ from typing import Dict, Union
 
 import pandas as pd
 
-from hatchet.graphframe import Frame, Graph, GraphFrame, Node
+from hatchet.frame import Frame
+from hatchet.graph import Graph
+from hatchet.graphframe import GraphFrame
+from hatchet.node import Node
 
 
 def safe_unpack(
@@ -42,15 +50,17 @@ FILE_HEADER_OFFSET = 16
 
 class HPCToolkitReaderLatest:
 
-    def __init__(self, dir_path: str, parse_depth: int = None, parent_percentage_time: int = None, application_time: int = None) -> None:
-        # TODO: validate parse depth - should be greater than 0/1
-        # TODO: handle the case when time_metric_id is not set
-
-        self._parent_percentage = parent_percentage_time
-        self._application_percentage = application_time
-
+    def __init__(
+        self,
+        dir_path: str,
+        max_depth: int = None,
+        min_application_percentage_time: int = None,
+        min_parent_percentage_time: int = None,
+    ) -> None:
         self._dir_path = dir_path
-        self._parse_depth = parse_depth
+        self._max_depth = max_depth
+        self._application_percentage = min_application_percentage_time
+        self._parent_percentage = min_parent_percentage_time
 
         self._meta_file = None
         self._profile_file = None
@@ -60,11 +70,13 @@ class HPCToolkitReaderLatest:
         self._load_modules = {}
         self._metric_descriptions = {}
         self._summary_profile = {}
-        self._metrics_table = []
 
         self._time_metric = None
         self._inclusive_metrics = {}
         self._exclusive_metrics = {}
+
+        self._cct_roots = []
+        self._metrics_table = []
 
         for file_path in os.listdir(self._dir_path):
             if file_path.split(".")[-1] == "db":
@@ -194,6 +206,26 @@ class HPCToolkitReaderLatest:
 
         return self._functions[pFunction]
 
+    def _store_cct_node(self, ctxId: int, frame: dict, parent: Node = None) -> Node:
+        node = Node(Frame(frame), parent=parent, hnid=ctxId)
+        if parent is None:
+            self._cct_roots.append(node)
+        else:
+            parent.add_child(node)
+        node_value = {
+            "node": node,
+            "name": (
+                f"{frame['type']}: {frame['name']}" if frame["name"] != 1 else "entry"
+            ),
+        }
+
+        if ctxId in self._summary_profile:
+            node_value.update(self._summary_profile[ctxId])
+
+        self._metrics_table.append(node_value)
+
+        return node
+
     def _parse_context(
         self,
         current_offset: int,
@@ -209,24 +241,27 @@ class HPCToolkitReaderLatest:
             (szChildren, pChildren, ctxId, _, lexicalType, nFlexWords) = safe_unpack(
                 "<QQLHBB", meta_db, current_offset
             )
+            flex_offset = current_offset + 32
+            current_offset += 32 + nFlexWords * 8
 
             try:
                 my_time = self._summary_profile[ctxId][self._time_metric]
             except:
                 my_time = None
 
-            if my_time is None:
-                current_offset += 32 + nFlexWords * 8  # TODO: can I move this up??
+            if (
+                my_time is None
+                or (
+                    self._parent_percentage is not None
+                    and my_time / parent_time * 100.0 < self._parent_percentage
+                )
+                or (
+                    self._application_percentage is not None
+                    and my_time / self._total_execution_time * 100
+                    < self._application_percentage
+                )
+            ):
                 continue
-
-            if self._parent_percentage is not None and my_time / parent_time * 100.0 < self._parent_percentage:
-                current_offset += 32 + nFlexWords * 8  # TODO: can I move this up??
-                continue
-
-            if self._application_percentage is not None and my_time / self._total_execution_time * 100 < self._application_percentage:
-                current_offset += 32 + nFlexWords * 8  # TODO: can I move this up??
-                continue
-
 
             frame = {
                 "id": ctxId,
@@ -235,8 +270,6 @@ class HPCToolkitReaderLatest:
             }
 
             if nFlexWords:
-                flex_offset = current_offset + 32
-
                 if lexicalType == 0:
                     (pFunction,) = safe_unpack("<Q", meta_db, flex_offset)
                     frame["name"] = self._parse_function(meta_db, pFunction)["name"]
@@ -253,21 +286,9 @@ class HPCToolkitReaderLatest:
                         f"{self._parse_source_file(meta_db, pFile)['file_path']}:{line}"
                     )
 
-            node = Node(Frame(frame), parent=parent, hnid=ctxId)
-            parent.add_child(node)
+            node = self._store_cct_node(ctxId, frame, parent)
 
-            node_value = {
-                "node": node,
-                "name": f"{frame['type']}: {frame['name']}",
-            }
-
-            if ctxId in self._summary_profile:
-                node_value.update(self._summary_profile[ctxId])
-
-            self._metrics_table.append(node_value)
-
-            if self._parse_depth is None or frame["depth"] < self._parse_depth:
-                
+            if self._max_depth is None or frame["depth"] < self._max_depth:
                 self._parse_context(
                     pChildren,
                     szChildren,
@@ -275,8 +296,6 @@ class HPCToolkitReaderLatest:
                     meta_db,
                     my_time,
                 )
-
-            current_offset += 32 + nFlexWords * 8  # TODO: can I move this up??
 
     def _read_summary_profile(
         self,
@@ -337,8 +356,6 @@ class HPCToolkitReaderLatest:
     def _read_cct(
         self,
     ) -> None:
-        hatchet_roots = []
-
         with open(self._meta_file, "rb") as file:
             meta_db = file.read()
 
@@ -365,34 +382,22 @@ class HPCToolkitReaderLatest:
                 "name": entryPoint,
                 "depth": 0,
             }
-            entry_node = Node(Frame(frame), parent=None, hnid=ctxId)
 
-            hatchet_roots.append(entry_node)
-
-            entry_value = {"node": entry_node, "name": "entry"}
-
-            if ctxId in self._summary_profile:
-                entry_value.update(self._summary_profile[ctxId])
-
-            self._metrics_table.append(entry_value)
+            node = self._store_cct_node(ctxId, frame, None)
 
             try:
-                my_time = self._summary_profile[ctxId][self._time_metric]
+                self._total_execution_time = self._summary_profile[ctxId][
+                    self._time_metric
+                ]
             except:
-                my_time = None
-
-            self._total_execution_time = my_time
+                self._total_execution_time = None
 
             self._parse_context(
-                pChildren,
-                szChildren,
-                entry_node,
-                meta_db,
-                my_time
+                pChildren, szChildren, node, meta_db, self._total_execution_time
             )
 
             table = pd.DataFrame(self._metrics_table).set_index("node")
-            
+
             inclusive_metrics = []
             exclusive_metrics = []
 
@@ -400,12 +405,12 @@ class HPCToolkitReaderLatest:
                 if im in table.columns.tolist():
                     inclusive_metrics.append(im)
 
-            for em in list(self._exclusive_metrics.values()),:
+            for em in (list(self._exclusive_metrics.values()),):
                 if em in table.columns.tolist():
                     exclusive_metrics.append(em)
 
             graphframe = GraphFrame(
-                Graph(hatchet_roots),
+                Graph(self._cct_roots),
                 table,
                 inc_metrics=inclusive_metrics,
                 exc_metrics=exclusive_metrics,
