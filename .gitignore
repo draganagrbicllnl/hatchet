@@ -16,3 +16,5 @@ dist/
 llnl_hatchet.egg-info/
 
 hpctoolkit_test.py
+hpctoolkit_test.ipynb
+temp.txt

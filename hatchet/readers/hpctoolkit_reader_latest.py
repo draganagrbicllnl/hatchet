@@ -184,9 +184,6 @@ class HPCToolkitReaderLatest:
                 "P?MPI_.+",
                 name,
             ):
-                #if name.startswith("P"):
-                    #name = name[1:]
-
                 name = name[: re.match("^P?MPI_[a-zA-Z_]+", name).end()]
 
             self._functions[pFunction] = {
@@ -206,8 +203,8 @@ class HPCToolkitReaderLatest:
 
         return self._functions[pFunction]
 
-    def _store_cct_node(self, ctxId: int, frame: dict, parent: Node = None) -> Node:
-        node = Node(Frame(frame), parent=parent, hnid=ctxId)
+    def _store_cct_node(self, ctxId: int, frame: dict, parent: Node = None, depth: int = 0) -> Node:
+        node = Node(Frame(frame), parent=parent, hnid=ctxId, depth=depth)
         if parent is None:
             self._cct_roots.append(node)
         else:
@@ -264,9 +261,7 @@ class HPCToolkitReaderLatest:
                 continue
 
             frame = {
-                "id": ctxId,
-                "type": NODE_TYPE_MAPPING[lexicalType],
-                "depth": parent.frame["depth"] + 1,
+                "type": NODE_TYPE_MAPPING[lexicalType]
             }
 
             if nFlexWords:
@@ -286,9 +281,9 @@ class HPCToolkitReaderLatest:
                         f"{self._parse_source_file(meta_db, pFile)['file_path']}:{line}"
                     )
 
-            node = self._store_cct_node(ctxId, frame, parent)
+            node = self._store_cct_node(ctxId, frame, parent, parent._depth+1)
 
-            if self._max_depth is None or frame["depth"] < self._max_depth:
+            if self._max_depth is None or node._depth < self._max_depth:
                 self._parse_context(
                     pChildren,
                     szChildren,
@@ -377,13 +372,11 @@ class HPCToolkitReaderLatest:
                 continue
 
             frame = {
-                "id": ctxId,
                 "type": "entry",
-                "name": entryPoint,
-                "depth": 0,
+                "name": entryPoint
             }
 
-            node = self._store_cct_node(ctxId, frame, None)
+            node = self._store_cct_node(ctxId, frame)
 
             try:
                 self._total_execution_time = self._summary_profile[ctxId][
