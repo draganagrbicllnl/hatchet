@@ -17,8 +17,13 @@ from .external.console import ConsoleRenderer
 from .frame import Frame
 from .graph import Graph
 from .node import Node
-from .query import (AbstractQuery, ObjectQuery, QueryEngine, is_hatchet_query,
-                    parse_string_dialect)
+from .query import (
+    AbstractQuery,
+    ObjectQuery,
+    QueryEngine,
+    is_hatchet_query,
+    parse_string_dialect,
+)
 from .util.deprecated import deprecated_params
 from .util.dot import trees_to_dot
 
