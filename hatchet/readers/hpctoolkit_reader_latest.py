@@ -136,11 +136,15 @@ class HPCToolkitReaderLatest:
                     read_string(meta_db, pScopeName - pMetrics_old).lower().strip()
                 ]
 
-                if name in ["cputime", "realtime", "cycles"] and scope_name == "i":
-                    self._time_metric = f"{name} ({scope_name})"
-
                 if scope_name in ["i", "e"]:
-                    self._metric_descriptions[propMetricId] = f"{name} ({scope_name})"
+                    if name in ["cputime", "realtime", "cycles"]:
+                        name = "time"
+
+                    metric_full_name = f"{name} (inc)" if scope_name == "i" else name
+                    if metric_full_name == "time (inc)":
+                        self._time_metric = metric_full_name
+
+                    self._metric_descriptions[propMetricId] = metric_full_name
 
     def _parse_source_file(self, meta_db: bytes, pFile: int) -> Dict[str, str]:
         if pFile not in self._source_files:
