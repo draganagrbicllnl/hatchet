@@ -90,14 +90,14 @@ class HPCToolkitReaderLatest:
                         self._meta_file = file_path
                     elif format == "prof":
                         self._profile_file = file_path
-                except:
+                except Exception:
                     pass
 
         if self._meta_file is None:
-            raise ValueError(f"ERROR: meta.db not found.")
+            raise ValueError("ERROR: meta.db not found.")
 
         if self._profile_file is None:
-            raise ValueError(f"ERROR: profile.db not found.")
+            raise ValueError("ERROR: profile.db not found.")
 
     def _read_metric_descriptions(self) -> None:
         with open(self._meta_file, "rb") as file:
@@ -121,10 +121,10 @@ class HPCToolkitReaderLatest:
             )
 
             name = read_string(meta_db, pName - pMetrics_old).lower().strip()
-            unit = None
+            # unit = None
             if name.endswith(")"):
                 name = name[:-1]
-                unit = name.split("(")[1].lower().strip()
+                # unit = name.split("(")[1].lower().strip()
                 name = name.split("(")[0].lower().strip()
 
             for j in range(nScopeInsts):
@@ -186,6 +186,15 @@ class HPCToolkitReaderLatest:
             ):
                 name = name[: re.match("^P?MPI_[a-zA-Z_]+", name).end()]
 
+            if " [" in name:
+                name = name[: name.index(" [")]
+
+            if "." in name:
+                name = name[: name.index(".")]
+
+            if "@" in name:
+                name = name[: name.index("@")]
+
             self._functions[pFunction] = {
                 "id": pFunction,
                 "name": name,
@@ -203,7 +212,9 @@ class HPCToolkitReaderLatest:
 
         return self._functions[pFunction]
 
-    def _store_cct_node(self, ctxId: int, frame: dict, parent: Node = None, depth: int = 0) -> Node:
+    def _store_cct_node(
+        self, ctxId: int, frame: dict, parent: Node = None, depth: int = 0
+    ) -> Node:
         node = Node(Frame(frame), parent=parent, hnid=ctxId, depth=depth)
         if parent is None:
             self._cct_roots.append(node)
@@ -212,7 +223,10 @@ class HPCToolkitReaderLatest:
         node_value = {
             "node": node,
             "name": (
-                f"{frame['type']}: {frame['name']}" if frame["name"] != 1 else "entry"
+                # f"{frame['type']}: {frame['name']}"
+                frame["name"]
+                if frame["name"] != 1
+                else "entry"
             ),
         }
 
@@ -243,7 +257,7 @@ class HPCToolkitReaderLatest:
 
             try:
                 my_time = self._summary_profile[ctxId][self._time_metric]
-            except:
+            except Exception:
                 my_time = None
 
             if (
@@ -260,9 +274,7 @@ class HPCToolkitReaderLatest:
             ):
                 continue
 
-            frame = {
-                "type": NODE_TYPE_MAPPING[lexicalType]
-            }
+            frame = {"type": NODE_TYPE_MAPPING[lexicalType]}
 
             if nFlexWords:
                 if lexicalType == 0:
@@ -281,7 +293,7 @@ class HPCToolkitReaderLatest:
                         f"{self._parse_source_file(meta_db, pFile)['file_path']}:{line}"
                     )
 
-            node = self._store_cct_node(ctxId, frame, parent, parent._depth+1)
+            node = self._store_cct_node(ctxId, frame, parent, parent._depth + 1)
 
             if self._max_depth is None or node._depth < self._max_depth:
                 self._parse_context(
@@ -371,10 +383,7 @@ class HPCToolkitReaderLatest:
             if entryPoint != 1:
                 continue
 
-            frame = {
-                "type": "entry",
-                "name": entryPoint
-            }
+            frame = {"type": "entry", "name": "entry"}
 
             node = self._store_cct_node(ctxId, frame)
 
@@ -382,7 +391,7 @@ class HPCToolkitReaderLatest:
                 self._total_execution_time = self._summary_profile[ctxId][
                     self._time_metric
                 ]
-            except:
+            except Exception:
                 self._total_execution_time = None
 
             self._parse_context(

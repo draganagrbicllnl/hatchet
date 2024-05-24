@@ -4,29 +4,23 @@
 # SPDX-License-Identifier: MIT
 
 import copy
+import json
 import sys
 import traceback
-
 from collections import defaultdict
 
-import pandas as pd
-import numpy as np
 import multiprocess as mp
-import json
+import numpy as np
+import pandas as pd
 
-from .node import Node
-from .graph import Graph
-from .frame import Frame
-from .query import (
-    is_hatchet_query,
-    ObjectQuery,
-    parse_string_dialect,
-    QueryEngine,
-    AbstractQuery,
-)
 from .external.console import ConsoleRenderer
-from .util.dot import trees_to_dot
+from .frame import Frame
+from .graph import Graph
+from .node import Node
+from .query import (AbstractQuery, ObjectQuery, QueryEngine, is_hatchet_query,
+                    parse_string_dialect)
 from .util.deprecated import deprecated_params
+from .util.dot import trees_to_dot
 
 try:
     from .cython_modules.libs import graphframe_modules as _gfm_cy
@@ -111,7 +105,12 @@ class GraphFrame:
         return HPCToolkitReader(dirname).read()
 
     @staticmethod
-    def from_hpctoolkit_latest(dirname: str, max_depth: int = None, min_percentage_of_application_time: int = None, min_percentage_of_parent_time: int = None):
+    def from_hpctoolkit_latest(
+        dirname: str,
+        max_depth: int = None,
+        min_percentage_of_application_time: int = None,
+        min_percentage_of_parent_time: int = None,
+    ):
         """
         Read an HPCToolkit database directory into a new GraphFrame
 
@@ -127,7 +126,12 @@ class GraphFrame:
         # import this lazily to avoid circular dependencies
         from .readers.hpctoolkit_reader_latest import HPCToolkitReaderLatest
 
-        return HPCToolkitReaderLatest(dirname, max_depth=max_depth, min_application_percentage_time=min_percentage_of_application_time, min_parent_percentage_time=min_percentage_of_parent_time).read()
+        return HPCToolkitReaderLatest(
+            dirname,
+            max_depth=max_depth,
+            min_application_percentage_time=min_percentage_of_application_time,
+            min_parent_percentage_time=min_percentage_of_parent_time,
+        ).read()
 
     @staticmethod
     def from_caliper(filename_or_stream, query=None):
